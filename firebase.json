@@ -18,6 +18,10 @@
     ],
     "rewrites": [
       {
+        "source": "/.well-known/webfinger",
+        "function": "default"
+      },
+      {
         "source": "/api/**",
         "function": "default"
       },

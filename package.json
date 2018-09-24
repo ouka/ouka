@@ -1,6 +1,6 @@
 {
   "name": "ouka",
-  "description": "Firebase SNS built on top of Social Web Protocols",
+  "description": "The experimental SNS implementation works on Firebase, built with Social Web Protocols.",
   "repository": {
     "type": "git",
     "url": "https://github.com/nakanokurenai/ouka.git"

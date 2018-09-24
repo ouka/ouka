@@ -1,5 +1,5 @@
 # ouka
-:cherry_blossom: ActivityPub in Firebase Land
+:cherry_blossom: Social Web Protocols on Firebase
 
 ## Prerequirements
 - Firebase CLI

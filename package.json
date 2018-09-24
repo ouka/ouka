@@ -1,6 +1,6 @@
 {
   "name": "ouka",
-  "description": "an ActivityPub implement works on Firebase ",
+  "description": "Firebase SNS built on top of Social Web Protocols",
   "repository": {
     "type": "git",
     "url": "https://github.com/nakanokurenai/ouka.git"

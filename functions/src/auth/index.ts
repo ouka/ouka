@@ -6,7 +6,10 @@ import { firestore } from '../preload'
 export const onCreate = Functions.auth.user().onCreate(async (user) => {
   const ref = firestore.collection('accounts').doc()
   await ref.set({
-    isAdmin: config.service.owner.email == user.email && user.emailVerified,
+    attributes: [
+      ...(config.service.owner.email == user.email && user.emailVerified ? ['admin'] : []),
+      'user'
+    ],
     userpart: ref.id,
     uid: user.uid
   })

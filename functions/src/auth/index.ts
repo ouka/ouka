@@ -32,7 +32,7 @@ export const onCreate = Functions.runWith({
       const snapshot = await transaction.get(query)
 
       if (!snapshot.empty) {
-        if (!snapshot.docs[0].data().disabled) {
+        if (!snapshot.docs[0].data().attributes.gone) {
           // no new account that has same address (bug?)
           throw new Error('No new acccout that has same e-mail address!')
         }

@@ -23,7 +23,7 @@
         "function": "default"
       },
       {
-        "source": "/api/**",
+        "source": "/ap/**",
         "function": "default"
       },
       {

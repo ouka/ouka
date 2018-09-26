@@ -7,10 +7,11 @@ import Actor from '../../models/actor'
 
 const ap = new Router()
 
-// Only accept 'Accept: application/activity+json', and return type
+// Only accept type 'application/activity+json', and return type
 ap.use((ctx, next) => {
-  if (!(ctx.headers.Accept && ctx.headers.Accept === 'application/activity+json')) ctx.throw(400, 'invalid: accept header')
+  if (!(ctx.accepts('application/activity+json')) || ctx.method !== 'get' && ctx.request.type === 'applicaiton/activity+json') ctx.throw(400, 'invalid type requested')
   ctx.set('Content-Type', 'application/activity+json')
+  ctx.set('Cache-Control', 'private')
   return next()
 })
 
@@ -19,21 +20,23 @@ const DRAFT_CAVEGE_HTTP_SIGNATURES_10_REQUEST_TARGET = `(request-target)`
 const DraftCavegeHTTPSignatures10Middleware = async (ctx, next) => {
   const r = Joi.object().required().keys({
     signature: Joi.string().required()
-  }).validate<{
+  }).unknown(true).validate<{
     signature: string
   }>(ctx.headers)
   if (r.error) throw r.error
 
-  const rawSignature = r.value.signature.split(',').map(v => {
-    return v.split('=')
-  }).map(current => {
-    const [key, rawValue] = current
-    const value = key === 'headers' ? JSON.parse(rawValue) : JSON.parse(rawValue).split(' ')
-    return [key, value]
-  }).reduce((target, current) => {
-    target[current[0]] = current[1]
-    return target
-  }, {})
+  const rawSignature = (() => {
+    const v = r.value.signature.split(`",`).map(vv => vv.split(`="`))
+    v[v.length-1][1] = v[v.length-1][1].split(`"`)[0] 
+    return v.map((current): [string, string | string[]] => {
+      const [key, rawValue] = current
+      const value = key === 'headers' ? rawValue.split(' ') : rawValue
+      return [key, value]
+    }).reduce((target, current) => {
+      target[current[0]] = current[1]
+      return target
+    }, {})
+  })()
 
   const { error, value: signature } = Joi.object().required().keys({
     keyId: Joi.string().required(),
@@ -50,6 +53,7 @@ const DraftCavegeHTTPSignatures10Middleware = async (ctx, next) => {
 
   // get actor
   const actor = await Actor.fetch(signature.keyId)
+  await actor.save() // cache
   ctx.state.actor = actor
 
   const sourceHeaders = signature.headers || ['Date']
@@ -72,7 +76,7 @@ ap.post("/accounts/@:userpart/inbox", DraftCavegeHTTPSignatures10Middleware, Bod
 })
 
 ap.get('/accounts/@:userpart', async (ctx) => {
-  return (await Actor.findByUserpart(ctx.params.userpart)).toJSON()
+  ctx.body = (await Actor.findByUserpart(ctx.params.userpart)).toJSON()
 })
 
 const root = new Router()

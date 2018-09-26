@@ -29,7 +29,8 @@ class Actor {
     return new Actor({
       id: `https://${config.service.host}/accounts/${u.id}`,
       userpart: d.userpart,
-      keyring: d.keyring
+      keyring: d.keyring,
+      [IsLocal]: true
     })
   }
 
@@ -40,10 +41,11 @@ class Actor {
       id: Joi.string().required(),
       preferredUsername: Joi.string().required(),
       publicKey: Joi.object().required().keys({
-        // TODO: more strict!!!!
+        id: Joi.string().required(),
+        owner: Joi.string().required(),
         publicKeyPem: Joi.string().required()
       })
-    }).validate<{
+    }).unknown(true).validate<{
       id: string,
       preferredUsername: string,
       publicKey: {
@@ -60,7 +62,8 @@ class Actor {
       keyring: {
         pub: value.publicKey.publicKeyPem // string...
       },
-      userpart: value.preferredUsername
+      userpart: value.preferredUsername,
+      activity: value
     })
   }
 
@@ -139,7 +142,7 @@ class Actor {
 
   async save() {
     if (this._isLocal) return
-    await firestore.collection('ActorActivity').doc(this._activity.id).set(this._activity)
+    await firestore.collection('ActorActivity').doc().set(this._activity)
   }
 }
 

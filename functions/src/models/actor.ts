@@ -1,6 +1,6 @@
 import axios from 'axios'
 import config from '../config';
-import { createVerify, Utf8AsciiLatin1Encoding, timingSafeEqual, createSign } from 'crypto';
+import { createVerify, createSign } from 'crypto';
 import { firestore } from '../preload';
 import * as Joi from 'joi'
 
@@ -13,11 +13,11 @@ type Keyring = {
 }
 
 class Actor {
-  private isLocal: boolean
-  private id: string
-  private userpart: string
-  private keyring: Keyring
-  private activity?: any
+  private _isLocal: boolean
+  private _id: string
+  private _userpart: string
+  private _keyring: Keyring
+  private _activity?: any
 
   // local's one
   static async findByUserpart(userpart: string) {
@@ -89,51 +89,57 @@ class Actor {
       userpart: string,
       activity?: any
     }) {
-    this.isLocal = isLocal !== null
-    if (!this.isLocal && !activity) {
+    this._isLocal = isLocal !== null
+    if (!this._isLocal && !activity) {
       throw new Error('No activity')
-      this.activity = activity
+    } else {
+      this._activity = activity
     }
-    this.id = id
-    this.keyring = keyring
-    this.userpart = userpart
+    this._id = id
+    this._keyring = keyring
+    this._userpart = userpart
     return
+  }
+
+  get id () {
+    return this._id
   }
 
   // FIXME: なんか JSON ってネーミング気に入らん
   toJSON() {
+    if (!this._isLocal) throw new Error('Can not convert non local')
     return {
       "@context": [
         "https://www.w3.org/ns/activitystreams",
         "https://w3id.org/security/v1"
       ],
-      "id": `https://${config.service.host}/accounts/@${this.userpart}`,
+      "id": `https://${config.service.host}/ap/accounts/@${this._userpart}`,
       "type": "Person",
-      "inbox": `https://${config.service.host}/accounts/@${this.userpart}/inbox`,
+      "inbox": `https://${config.service.host}/ap/accounts/@${this._userpart}/inbox`,
       "publicKey": {
-        "id": `https://${config.service.host}/accounts/@${this.userpart}#key`,
-        "owner": `https://${config.service.host}/accounts/@${this.userpart}`,
-        "publicKeyPem": this.keyring.pub
+        "id": `https://${config.service.host}/ap/accounts/@${this._userpart}#key`,
+        "owner": `https://${config.service.host}/ap/accounts/@${this._userpart}`,
+        "publicKeyPem": this._keyring.pub
       }
     }
   }
 
   sign(data: string) {
-    if (!this.isLocal || !this.keyring.key) throw new Error('Can not call sign with remote actor.')
+    if (!this._isLocal || !this._keyring.key) throw new Error('Can not call sign with remote actor.')
     const s = createSign('RSA-SHA256')
     s.update(data)
-    return s.sign(this.keyring.key, 'base64')
+    return s.sign(this._keyring.key, 'base64')
   }
 
   verify(data: string, b64Signature: string) {
     const v = createVerify('RSA-SHA256')
     v.update(data) // utf-8
-    return v.verify(this.keyring.pub, b64Signature, 'base64')
+    return v.verify(this._keyring.pub, b64Signature, 'base64')
   }
 
   async save() {
-    if (this.isLocal) return
-    await firestore.collection('ActorActivity').doc(this.activity.id).set(this.activity)
+    if (this._isLocal) return
+    await firestore.collection('ActorActivity').doc(this._activity.id).set(this._activity)
   }
 }
 

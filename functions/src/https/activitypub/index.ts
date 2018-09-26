@@ -94,7 +94,7 @@ root.get("/.well-known/webfinger", async ctx => {
       {
         "rel": "self",
         "type": "application/activity+json",
-        "href": `https://${config.service.host}/accounts/@${uname}` 
+        "href": `https://${config.service.host}/ap/accounts/@${uname}` 
       }
     ]
   }

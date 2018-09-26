@@ -1,3 +1,8 @@
 import * as Functions from "firebase-functions";
+import * as Joi from 'joi'
 
-export const onOutbox = Functions.firestore.document('')
+/**
+ * TODO: Add error reporting!
+ */
+
+export default null

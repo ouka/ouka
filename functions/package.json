@@ -12,18 +12,25 @@
   },
   "main": "lib/index.js",
   "dependencies": {
+    "@google-cloud/logging": "^4.0.1",
     "@types/joi": "^13.4.5",
+    "axios": "^0.18.0",
     "firebase-admin": "~6.0.0",
     "firebase-functions": "^2.0.3",
     "joi": "^13.6.0",
     "koa": "^2.5.3",
+    "koa-body": "^4.0.4",
+    "koa-bodyparser": "^4.2.1",
     "koa-logger": "^3.2.0",
-    "koa-router": "^7.4.0"
+    "koa-router": "^7.4.0",
+    "node-rsa": "^1.0.1"
   },
   "devDependencies": {
     "@types/koa": "^2.0.46",
+    "@types/koa-bodyparser": "^5.0.1",
     "@types/koa-logger": "^3.1.0",
     "@types/koa-router": "^7.0.32",
+    "@types/node-rsa": "^0.4.3",
     "tslint": "~5.8.0",
     "typescript": "~2.8.3"
   },

@@ -1,7 +1,9 @@
 import * as Functions from 'firebase-functions'
+import * as NodeRSA from 'node-rsa'
 
 import config from '../config'
 import { firestore } from '../preload'
+import { Certificate } from 'crypto';
 
 const runtimeOpts = {
   timeoutSeconds: 30,
@@ -9,14 +11,23 @@ const runtimeOpts = {
 }
 
 export const onCreate = Functions.runWith(runtimeOpts).auth.user().onCreate(async (user) => {
-  const ref = firestore.collection('accounts').doc()
-  await ref.set({
+  // TODO NOTE:
+  // * MUST implement client collectly to prevent XSS! (client side)
+  // * MUST implement colision check of userpart!
+  const userpart = user.email.split('@')[0].slice(0, 20)
+  const key = new NodeRSA({b: 2048})
+
+  await firestore.collection('accounts').doc().set({
     attributes: [
       ...(config.service.owner.email == user.email && user.emailVerified ? ['admin'] : []),
       'user'
     ],
-    userpart: ref.id,
-    uid: user.uid
+    userpart,
+    uid: user.uid,
+    keyring: {
+      key: key.exportKey('pkcs1-private-pem').toString(),
+      pub: key.exportKey('pkcs1-public-pem').toString()
+    }
   })
 })
 

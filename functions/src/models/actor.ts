@@ -1,11 +1,24 @@
 import axios from 'axios'
 import config from '../config';
-import { createVerify, createSign } from 'crypto';
+import { createVerify, createSign, createHash } from 'crypto';
 import { firestore } from '../preload';
 import * as Joi from 'joi'
+import { URL } from 'url';
 
 // Magics
 const IsLocal = Symbol('IsLocal')
+
+const ActorActivity = () => firestore.collection('ActorActivity')
+const Accounts = () => firestore.collection('accounts')
+
+type ActorActivity = {
+  id: string,
+  preferredUsername: string,
+  publicKey: {
+    publicKeyPem: string
+  },
+  inbox: string
+}
 
 type Keyring = {
   pub: string,
@@ -14,56 +27,90 @@ type Keyring = {
 
 class Actor {
   private _isLocal: boolean
-  private _id: string
+  private _freshRemoteActorActivity: boolean
+  private _id?: string
   private _userpart: string
   private _keyring: Keyring
-  private _activity?: any
+  private _activity?: ActorActivity
+  private _inboxURI: string
 
   // local's one
+  static async findById (id: string) {
+    const doc = await Accounts().doc(id).get()
+    if (!doc.exists) throw new Error('No specific accout!')
+    const d = doc.data()
+
+    return new Actor({
+      id: doc.id,
+      userpart: d.userpart,
+      keyring: d.keyring,
+      [IsLocal]: true,
+      // remove InboxURI
+      inboxURI: 'dummmy',
+    })
+  }
+
   static async findByUserpart(userpart: string) {
-    const uSnapshot = await firestore.collection('accounts').where('userpart', '==', userpart).limit(1).get()
+    const uSnapshot = await Accounts().where('userpart', '==', userpart).limit(1).get()
     if (uSnapshot.size === 0) throw new Error('No specific accout!')
     const u = uSnapshot.docs[0]
     const d = u.data()
 
     return new Actor({
-      id: `https://${config.service.host}/accounts/${u.id}`,
+      id: u.id,
       userpart: d.userpart,
       keyring: d.keyring,
-      [IsLocal]: true
+      [IsLocal]: true,
+      // remove InboxURI
+      inboxURI: 'dummmy',
     })
   }
 
   // remote's one
   static async fetch(uri: string) {
     // TODO: Joi の validator を移動する
+    // もっとちゃんと validator 書く
+    // 別のライブラリ使う (validate の)
+    const [raw, fresh = false] = await (async () => {
+      const url = new URL(uri)
+      url.hash = null
+
+      // cache
+      const h = createHash('sha256')
+      h.update(url.href)
+      const doc = await ActorActivity().doc(h.digest('hex')).get()
+      if (doc.exists) {
+        // enabled at only 1 day
+        const d = doc.createTime.toDate()
+        d.setDate(d.getDate() + 1)
+        if (d > (new Date())) return [doc.data()]
+      }
+
+      return [await axios.get(uri, {
+        headers: {
+          'Accept': 'application/activity+json'
+        }
+      }).then(v => v.data), true]
+    })()
     const { error, value } = Joi.object().required().keys({
       id: Joi.string().required(),
       preferredUsername: Joi.string().required(),
+      inbox: Joi.string().required(),
       publicKey: Joi.object().required().keys({
         id: Joi.string().required(),
         owner: Joi.string().required(),
         publicKeyPem: Joi.string().required()
       })
-    }).unknown(true).validate<{
-      id: string,
-      preferredUsername: string,
-      publicKey: {
-        publicKeyPem: string
-      }
-    }>(await axios.get(uri, {
-      headers: {
-        'Accept': 'application/activity+json'
-      }
-    }).then(v => v.data))
+    }).unknown(true).validate<ActorActivity>(raw)
     if (error) throw error
     return new Actor({
-      id: value.id,
       keyring: {
-        pub: value.publicKey.publicKeyPem // string...
+        pub: value.publicKey.publicKeyPem
       },
       userpart: value.preferredUsername,
-      activity: value
+      activity: value,
+      fresh,
+      inboxURI: value.inbox
     })
   }
 
@@ -80,32 +127,46 @@ class Actor {
   }
 
   constructor({
-    id,
+    id = null,
     [IsLocal]: isLocal = null,
     keyring,
     userpart,
-    activity = null
+    activity = null,
+    fresh = false,
+    inboxURI
   }: {
-      id: string,
+      id?: string,
       [IsLocal]?: any,
       keyring: Keyring,
       userpart: string,
-      activity?: any
+      activity?: ActorActivity,
+      fresh?: boolean,
+      inboxURI: string
     }) {
     this._isLocal = isLocal !== null
-    if (!this._isLocal && !activity) {
-      throw new Error('No activity')
+    if (!this._isLocal && (!activity || !id)) {
+      throw new Error('No activity | id')
     } else {
       this._activity = activity
     }
     this._id = id
     this._keyring = keyring
     this._userpart = userpart
+    this._freshRemoteActorActivity = fresh
+    this._inboxURI = inboxURI
     return
   }
 
-  get id () {
+  get id() {
     return this._id
+  }
+
+  get inboxURI () {
+    return this._inboxURI
+  }
+
+  get isLocal() {
+    return this._isLocal
   }
 
   // FIXME: なんか JSON ってネーミング気に入らん
@@ -113,12 +174,12 @@ class Actor {
     if (!this._isLocal) throw new Error('Can not convert non local')
     return {
       "@context": [
-        "https://www.w3.org/ns/activitystreams",
-        "https://w3id.org/security/v1"
+        "https://www.w3.org/ns/activitystreams"
       ],
       "id": `https://${config.service.host}/ap/accounts/@${this._userpart}`,
       "type": "Person",
       "inbox": `https://${config.service.host}/ap/accounts/@${this._userpart}/inbox`,
+      preferredUsername: this._userpart,
       "publicKey": {
         "id": `https://${config.service.host}/ap/accounts/@${this._userpart}#key`,
         "owner": `https://${config.service.host}/ap/accounts/@${this._userpart}`,
@@ -141,8 +202,47 @@ class Actor {
   }
 
   async save() {
-    if (this._isLocal) return
-    await firestore.collection('ActorActivity').doc().set(this._activity)
+    if (!this._freshRemoteActorActivity) return
+    const h = createHash('sha256')
+    h.update(this._activity.id)
+    await ActorActivity().doc(h.digest('hex')).set(this._activity)
+  }
+
+  async send (target: Actor, activity: any) {
+    if (!this._isLocal) throw new Error('Can not convert non local')
+    if (target.isLocal) return
+
+    const inboxUrl = new URL(target.inboxURI)
+
+    const headers = {
+      date: (new Date()).toUTCString(),
+      host: inboxUrl.host
+    } as any
+    const sign: string = ((requestTarget: string) => {
+      const source = [
+        `(request-target): ${requestTarget}`
+      ]
+      Object.keys(headers).forEach(key => {
+        source.push(`${key.toLowerCase()}: ${headers[key]}`)
+      })
+      
+      const s = source.join('\n')
+
+      return this.sign(s)
+    })(`post ${inboxUrl.pathname}`)
+    headers.signature = `keyId="https://${config.service.host}/ap/accounts/@${this._userpart}#key",headers="(request-target) ${Object.keys(headers).map(v => v.toLowerCase()).join(' ')}",signature="${sign}"`
+
+    await axios.post(target.inboxURI, activity, {headers})
+  }
+
+  async followers () {
+    if (!this._isLocal) throw new Error('Can not convert non local')
+    const snapshot = await Accounts().doc(this.id).collection('followers').get()
+    const fw = []
+    snapshot.forEach(v => {
+      fw.push(Actor.fetch(v.data().id))
+    })
+    return Promise.all(fw)
   }
 }
 

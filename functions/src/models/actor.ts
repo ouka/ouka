@@ -144,11 +144,12 @@ class Actor {
       inboxURI: string
     }) {
     this._isLocal = isLocal !== null
-    if (!this._isLocal && (!activity || !id)) {
-      throw new Error('No activity | id')
+    if (!this._isLocal && (!activity)) {
+      throw new Error('No activity')
     } else {
       this._activity = activity
     }
+    if (this._isLocal && !id) throw new Error ('no id')
     this._id = id
     this._keyring = keyring
     this._userpart = userpart

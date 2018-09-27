@@ -15,10 +15,7 @@ const Accounts = () => firestore.collection('accounts')
  * TODO: Add error reporting!
  */
 
-export const onCreate = Functions.runWith({
-  ...runtimeOpts,
-  timeoutSeconds: 60
-}).auth.user().onCreate((user) => {
+export const onCreate = Functions.runWith(runtimeOpts).auth.user().onCreate((user) => {
   // TODO NOTE:
   // * MUST implement client collectly to prevent XSS! (client side)
   // * MUST implement colision check of userpart!

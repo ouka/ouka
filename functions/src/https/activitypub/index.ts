@@ -86,6 +86,7 @@ ap.post("/accounts/@:userpart/inbox", DraftCavegeHTTPSignatures10Middleware, asy
 
     if (body.type === 'Follow') {
       b.set(firestore.collection('accounts').doc(actor.id).collection('outbox').doc(), {
+        "@context": "https://www.w3.org/ns/activitystreams",
         id: `https://${config.service.host}/ap/accounts/@${ctx.params.userpart}#accepts/followers/#${Math.floor(Math.random()*100)}`,
         type: 'Accept',
         actor: `https://${config.service.host}/ap/accounts/@${ctx.params.userpart}`,

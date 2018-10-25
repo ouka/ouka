@@ -1,5 +1,5 @@
 import axios from 'axios'
-import * as Joi from 'joi'
+import Joi = require('joi')
 
 export type ActorActivity = {
   id: string,

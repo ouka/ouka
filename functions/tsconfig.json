@@ -3,10 +3,8 @@
     "lib": ["es6"],
     "module": "commonjs",
     "noImplicitReturns": true,
-    "outDir": "dist",
-    "sourceMap": true,
+    "outDir": "out",
     "target": "es6",
-    "declaration": true,
     "paths": {
       "~/*": ["*"],
       "@ouka/*": ["lib/*"]

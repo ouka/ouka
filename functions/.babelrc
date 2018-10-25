@@ -4,21 +4,19 @@
       "targets": {
         "node": "current"
       }
-    }],
-    "@babel/typescript"
+    }]
   ],
   "plugins": [
     ["module-resolver", {
-      "extensions": [".js", ".ts"],
+      "extensions": [".js"],
       "root": [
-        "./src"
+        "./out/"
       ],
       "alias": {
-        "~": "./src/",
-        "@ouka": "./src/lib/"
+        "~": "./out/",
+        "@ouka": "./out/lib/"
       }
     }],
-    "@babel/plugin-transform-typescript",
     "@babel/plugin-proposal-class-properties"
   ]
 }

@@ -1,4 +1,4 @@
-import * as Joi from 'joi'
+import Joi = require('joi')
 import Actor from '~/models/actor'
 
 export type Headers = {[k: string]: string}

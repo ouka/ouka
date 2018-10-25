@@ -1,5 +1,5 @@
 import * as Functions from 'firebase-functions'
-import * as Koa from 'koa'
+import Koa = require('koa')
 
 import activityPubRouter from './activitypub'
 

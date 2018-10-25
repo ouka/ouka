@@ -1,5 +1,5 @@
 import * as Functions from 'firebase-functions'
-import * as Joi from 'joi';
+import Joi = require('joi');
 
 const schema = Joi.object().required().keys({
   service: Joi.object().required().keys({

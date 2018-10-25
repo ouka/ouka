@@ -1,7 +1,7 @@
 import config from '~/config';
 import { createVerify, createSign, createHash } from 'crypto';
 import { firestore } from '~/preload';
-import * as Joi from 'joi'
+import Joi = require('joi')
 import { URL } from 'url';
 import axios from 'axios';
 

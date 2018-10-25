@@ -1,8 +1,10 @@
 import * as Functions from 'firebase-functions'
 import * as NodeRSA from 'node-rsa'
 
-import config from '../config'
-import { firestore } from '../preload'
+import { auth } from 'firebase-admin'
+
+import config from '~/config'
+import { firestore } from '~/preload'
 
 const runtimeOpts = {
   timeoutSeconds: 30,

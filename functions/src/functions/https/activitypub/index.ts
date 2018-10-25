@@ -2,9 +2,11 @@ import * as Router from 'koa-router'
 import * as BodyParser from 'koa-bodyparser'
 import * as Joi from 'joi'
 
-import config from '../../config'
-import Actor from '../../models/actor'
-import { firestore } from '../../preload';
+import * as DraftCavegeHTTPSignatures10 from '@ouka/draft-cavage-http-signature-10'
+
+import config from '~/config'
+import Actor from '~/models/actor'
+import { firestore } from '~/preload';
 
 import { Request } from 'firebase-functions'
 
@@ -19,10 +21,7 @@ ap.use((ctx, next) => {
 })
 
 // draft-cavage-http-signatures-10
-const DRAFT_CAVEGE_HTTP_SIGNATURES_10_REQUEST_TARGET = `(request-target)`
 const DraftCavegeHTTPSignatures10Middleware = async (ctx, next) => {
-  return next()
-  /**
   const r = Joi.object().required().keys({
     signature: Joi.string().required()
   }).unknown(true).validate<{
@@ -30,47 +29,16 @@ const DraftCavegeHTTPSignatures10Middleware = async (ctx, next) => {
   }>(ctx.headers)
   if (r.error) throw r.error
 
-  const rawSignature = (() => {
-    const v = r.value.signature.split(`",`).map(vv => vv.split(`="`))
-    v[v.length-1][1] = v[v.length-1][1].split(`"`)[0] 
-    return v.map((current): [string, string | string[]] => {
-      const [key, rawValue] = current
-      const value = key === 'headers' ? rawValue.split(' ') : rawValue
-      return [key, value]
-    }).reduce((target, current) => {
-      target[current[0]] = current[1]
-      return target
-    }, {})
-  })()
-
-  const { error, value: signature } = Joi.object().required().keys({
-    keyId: Joi.string().required(),
-    signature: Joi.string().required(),
-    headers: Joi.array().items(Joi.string()),
-    algorithm: Joi.string()
-  }).validate<{
-    keyId: string,
-    signature: string,
-    headers?: string[],
-    algorithm?: string
-  }>(rawSignature as any)
-  if (error) throw error
-
-  // get actor
-  const actor = await Actor.fetch(signature.keyId)
-  await actor.save() // cache
-  ctx.state.actor = actor
-
-  const sourceHeaders = signature.headers || ['Date']
-  const source = sourceHeaders.map(k => {
-    if (k === DRAFT_CAVEGE_HTTP_SIGNATURES_10_REQUEST_TARGET) return `${k}: ${ctx.method.toLowerCase()} ${ctx.path}`
-    return `${k}: ${ctx.headers[k]}`
-  }).join('\n')
-
-  if (!actor.verify(source, signature.signature)) ctx.throw(400, 'Invalid signature, ' + ctx.headers.signature)
-
-  return next()
-  */
+  const signature = DraftCavegeHTTPSignatures10.decode(r.value.signature)
+  try {
+    const actor = await Actor.fetch(signature.keyId)
+    await DraftCavegeHTTPSignatures10.verify({ signature, headers: ctx.headers, method: ctx.method, path: ctx.path, actor })
+    ctx.state.actor = actor
+    return next()
+  } catch (e) {
+    if (e instanceof DraftCavegeHTTPSignatures10.InvalidSignatureError) return ctx.throw(400, 'Invalid signature given.')
+    throw e
+  }
 }
 
 ap.post("/accounts/@:userpart/inbox", DraftCavegeHTTPSignatures10Middleware, async (ctx, next) => {

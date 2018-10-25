@@ -1,6 +1,6 @@
 import * as Functions from "firebase-functions";
 import * as Joi from 'joi'
-import Actor from "../models/actor";
+import Actor from "~/models/actor";
 
 const runtimeOpts = {
   timeoutSeconds: 30,

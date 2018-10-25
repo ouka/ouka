@@ -3,7 +3,7 @@ import * as Koa from 'koa'
 
 import activityPubRouter from './activitypub'
 
-import reportError from '../logging'
+import reportError from '~/logging'
 
 const app = new Koa()
 

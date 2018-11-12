@@ -6,6 +6,9 @@ import { URL } from 'url';
 import axios from 'axios';
 
 import fetchActorActivity, { ActorActivity } from '@ouka/fetch-actor-activity'
+import * as types from '@ouka/activity-vocabulary/types'
+
+const PUBLIC_ADDRESSING_ID = 'https://www.w3.org/ns/activitystreams#Public'
 
 // Magics
 export const IsLocal = Symbol('IsLocal')
@@ -18,6 +21,18 @@ export type Keyring = {
   key?: string
 }
 
+// FIXME: move this to lib/actibitypub OR lib/activity-vocabulary
+export type Activity = {
+  '@context': string | string[], // JSON-LD
+  type: string,
+  to: string | string[],
+  bto?: string | string[],
+  cc?: string | string[],
+  bcc?: string | string[],
+  audience?: string,
+  object?: any // we can validate later
+}
+
 export default class Actor {
   private _isLocal: boolean
   private _id?: string
@@ -25,6 +40,7 @@ export default class Actor {
   private _keyring: Keyring
   private _activity?: ActorActivity
   private _inboxURI: string | undefined
+  private _publicInboxURI: string | undefined
 
   constructor({
     id = null,
@@ -32,14 +48,16 @@ export default class Actor {
     keyring,
     userpart,
     activity = null,
-    inboxURI
+    inboxURI,
+    publicInboxURI
   }: {
       id?: string,
       [IsLocal]?: any,
       keyring: Keyring,
       userpart: string,
       activity?: ActorActivity,
-      inboxURI?: string
+      inboxURI?: string,
+      publicInboxURI?: string
     }) {
     this._isLocal = isLocal !== null
     if (!this._isLocal && (!activity)) {
@@ -52,6 +70,7 @@ export default class Actor {
     this._keyring = keyring
     this._userpart = userpart
     this._inboxURI = inboxURI
+    this._publicInboxURI = publicInboxURI
     return
   }
 
@@ -178,11 +197,74 @@ export default class Actor {
     return v.verify(this._keyring.pub, b64Signature, 'base64')
   }
 
-  async send (target: Actor, activity: any) {
-    if (!this._isLocal) throw new Error('Can not convert non local')
-    if (target.isLocal) return
+  async send (value: Activity) {
+    const receivers = [
+      ...(Array.isArray(value.to) ? value.to : [value.to]),
+      ...(Array.isArray(value.bto) ? value.bto : (typeof value.bto !== 'undefined' ? [value.bto] : [])),
+      ...(Array.isArray(value.cc) ? value.cc : (typeof value.cc !== 'undefined' ? [value.cc] : [])),
+      ...(Array.isArray(value.bcc) ? value.bcc : (typeof value.bcc !== 'undefined' ? [value.bcc] : [])),
+    ]
+ 
+    console.error(receivers.join(', '))
 
-    const inboxUrl = new URL(target.inboxURI)
+    // Public addressing
+    const isPublicAddressing = receivers.includes(PUBLIC_ADDRESSING_ID)
+  
+    const activity = (() => {
+      if (!types.Object.includes(value.type)) return {...value}
+  
+      const a = {
+        '@context': ['https://www.w3.org/ns/activitystreams'],
+        to: value.to,
+        object: {
+          ...value
+        }
+      } as Activity
+      delete a.object['@context']
+      if (typeof value.bto === 'undefined') a.bto = value.bto
+      if (typeof value.cc === 'undefined') a.cc = value.cc
+      if (typeof value.bcc === 'undefined') a.bcc = value.bto
+  
+      return a
+    })()
+    console.error(activity)
+  
+    // remove blind receivers
+    delete activity.bto
+    delete activity.bcc
+    if ('object' in activity) {
+      delete activity.object.bto
+      delete activity.object.bcc
+    }
+
+    // Too Wip (not support collection...)
+    const targetActors = (await Promise.all(receivers.map(async (v): Promise<null|Actor> => {
+      console.dir(receivers)
+      if (v == PUBLIC_ADDRESSING_ID) return Promise.resolve(null)
+      return Actor.fetch(v)
+    }))).filter(v => !!v)
+
+    // URLs
+    const targets = targetActors.map((actor: Actor) => {
+      /**
+      if (isPublicAddressing && false) {
+        targets.push(actor.publicInboxURI)
+      } else { */
+        return actor.inboxURI
+      //}
+    })
+
+    await Promise.all(targets.map(target => {
+      this.sendTo(target, activity)
+    }))
+  }
+
+  private async sendTo (target: string, activity) {
+    console.log(target)
+
+    if (!this._isLocal) throw new Error('Can not convert non local')
+
+    const inboxUrl = new URL(target)
 
     const headers = {
       date: (new Date()).toUTCString(),
@@ -202,7 +284,7 @@ export default class Actor {
     })(`post ${inboxUrl.pathname}`)
     headers.signature = `keyId="https://${config.service.host}/ap/accounts/@${this._userpart}#key",headers="(request-target) ${Object.keys(headers).map(v => v.toLowerCase()).join(' ')}",signature="${sign}"`
 
-    await axios.post(target.inboxURI, activity, {headers})
+    return axios.post(target, activity, {headers})
   }
 
   async followers () {

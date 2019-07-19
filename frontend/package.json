@@ -1,8 +1,0 @@
-{
-  "name": "frontend",
-  "scripts": {
-    "build": "echo built",
-    "deploy": "firebase deploy --only hosting"
-  },
-  "private": true
-}
